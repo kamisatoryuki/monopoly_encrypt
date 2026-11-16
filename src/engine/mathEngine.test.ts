@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
 import {
+  buildChallengeForTrigger,
+  createNewSession,
+  getNextMixedStateOnSolve,
+} from './gameEngine';
+import {
   charToCode,
   codeToChar,
   createPairedChallenge,
@@ -90,7 +95,7 @@ function runMathEngineTests() {
   }
   passed++;
 
-  // 6. Paired challenge flow & non-leaking 3-tier hints
+  // 6. Challenge validation & non-leaking 3-tier hints
   const challenge = createPairedChallenge({
     id: 'test-pair',
     trigger: 'SPECIAL_TILE',
@@ -123,7 +128,112 @@ function runMathEngineTests() {
   assert.equal(validDecrypt.isValid, true);
   passed++;
 
-  console.log(`PASS: ${passed}/${passed} mathematical engine test suites passed.`);
+  // 7. Challenge Type Selection: Encryption Only, Decryption Only, Mixed (alternating + reusing ciphertext)
+  for (const mode of ['classic', 'solo'] as const) {
+    const encOnlySession = createNewSession({
+      mode,
+      challengeType: 'encryption',
+      playerNames: ['P1', 'P2'],
+    });
+    assert.equal(encOnlySession.challengeType, 'encryption');
+    let curEnc = encOnlySession;
+    for (let stepIdx = 0; stepIdx < 4; stepIdx++) {
+      const built = buildChallengeForTrigger({
+        session: curEnc,
+        trigger: 'SPECIAL_TILE',
+      });
+      assert.equal(built.challenge.currentStep, 'ENCRYPT', 'Encryption Only must always generate ENCRYPT');
+      const nextMixed = getNextMixedStateOnSolve({
+        ...curEnc,
+        activeChallenge: built.challenge,
+      });
+      curEnc = {
+        ...curEnc,
+        usedPhraseIndices: built.nextUsedIndices,
+        mixedNextStep: nextMixed.mixedNextStep,
+        pendingMixedCipher: nextMixed.pendingMixedCipher,
+      };
+    }
+
+    const decOnlySession = createNewSession({
+      mode,
+      challengeType: 'decryption',
+      playerNames: ['P1', 'P2'],
+    });
+    assert.equal(decOnlySession.challengeType, 'decryption');
+    let curDec = decOnlySession;
+    for (let stepIdx = 0; stepIdx < 4; stepIdx++) {
+      const built = buildChallengeForTrigger({
+        session: curDec,
+        trigger: 'BUY_PROPERTY',
+      });
+      assert.equal(built.challenge.currentStep, 'DECRYPT', 'Decryption Only must always generate DECRYPT');
+      const nextMixed = getNextMixedStateOnSolve({
+        ...curDec,
+        activeChallenge: built.challenge,
+      });
+      curDec = {
+        ...curDec,
+        usedPhraseIndices: built.nextUsedIndices,
+        mixedNextStep: nextMixed.mixedNextStep,
+        pendingMixedCipher: nextMixed.pendingMixedCipher,
+      };
+    }
+
+    // Mixed: ENCRYPT -> DECRYPT (same ciphertext) -> ENCRYPT -> DECRYPT (same ciphertext)
+    let curMixed = createNewSession({
+      mode,
+      challengeType: 'mixed',
+      playerNames: ['P1', 'P2'],
+    });
+    assert.equal(curMixed.challengeType, 'mixed');
+    assert.equal(curMixed.mixedNextStep, 'ENCRYPT');
+
+    const c1 = buildChallengeForTrigger({ session: curMixed, trigger: 'BUY_PROPERTY' });
+    assert.equal(c1.challenge.currentStep, 'ENCRYPT');
+    const afterC1 = getNextMixedStateOnSolve({ ...curMixed, activeChallenge: c1.challenge });
+    assert.equal(afterC1.mixedNextStep, 'DECRYPT');
+    assert.equal(afterC1.pendingMixedCipher?.cipherText, c1.challenge.cipherText);
+    curMixed = {
+      ...curMixed,
+      usedPhraseIndices: c1.nextUsedIndices,
+      mixedNextStep: afterC1.mixedNextStep,
+      pendingMixedCipher: afterC1.pendingMixedCipher,
+    };
+
+    const c2 = buildChallengeForTrigger({ session: curMixed, trigger: 'SPECIAL_CARD' });
+    assert.equal(c2.challenge.currentStep, 'DECRYPT');
+    assert.equal(c2.challenge.fromPreviousMixedEncrypt, true);
+    assert.equal(c2.challenge.cipherText, c1.challenge.cipherText, 'Mixed DECRYPT must reuse previous ENCRYPT ciphertext');
+    assert.equal(c2.challenge.plaintext, c1.challenge.plaintext, 'Mixed DECRYPT must recover exact plaintext of previous ENCRYPT');
+    const afterC2 = getNextMixedStateOnSolve({ ...curMixed, activeChallenge: c2.challenge });
+    assert.equal(afterC2.mixedNextStep, 'ENCRYPT');
+    assert.equal(afterC2.pendingMixedCipher, null);
+    curMixed = {
+      ...curMixed,
+      usedPhraseIndices: c2.nextUsedIndices,
+      mixedNextStep: afterC2.mixedNextStep,
+      pendingMixedCipher: afterC2.pendingMixedCipher,
+    };
+
+    const c3 = buildChallengeForTrigger({ session: curMixed, trigger: 'SPECIAL_TILE' });
+    assert.equal(c3.challenge.currentStep, 'ENCRYPT');
+    const afterC3 = getNextMixedStateOnSolve({ ...curMixed, activeChallenge: c3.challenge });
+    curMixed = {
+      ...curMixed,
+      usedPhraseIndices: c3.nextUsedIndices,
+      mixedNextStep: afterC3.mixedNextStep,
+      pendingMixedCipher: afterC3.pendingMixedCipher,
+    };
+
+    const c4 = buildChallengeForTrigger({ session: curMixed, trigger: 'JAIL_ESCAPE' });
+    assert.equal(c4.challenge.currentStep, 'DECRYPT');
+    assert.equal(c4.challenge.fromPreviousMixedEncrypt, true);
+    assert.equal(c4.challenge.cipherText, c3.challenge.cipherText);
+  }
+  passed++;
+
+  console.log(`PASS: ${passed}/${passed} mathematical engine & challenge type test suites passed.`);
 }
 
 runMathEngineTests();

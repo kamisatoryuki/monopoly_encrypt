@@ -43,6 +43,8 @@ export interface SessionMathKeys {
   d: number;
 }
 
+export type ChallengeType = 'encryption' | 'decryption' | 'mixed';
+
 export type ChallengeTrigger =
   | 'BUY_PROPERTY'
   | 'SPECIAL_TILE'
@@ -51,8 +53,16 @@ export type ChallengeTrigger =
 
 export type ChallengeStep = 'ENCRYPT' | 'DECRYPT';
 
+export interface MixedCipherSource {
+  plaintext: string;
+  plainCodes: number[];
+  cipherNumbers: number[];
+  cipherText: string;
+}
+
 export interface PairedChallenge {
   id: string;
+  challengeType: ChallengeType;
   trigger: ChallengeTrigger;
   targetTileId?: number;
   title: string;
@@ -65,12 +75,12 @@ export interface PairedChallenge {
   cipherNumbers: number[];
   /** Comma-separated ciphertext without slashes */
   cipherText: string;
-  /** Current active step of the pair: Encrypt first, then Decrypt same ciphertext */
+  /** Active step for this challenge: ENCRYPT or DECRYPT */
   currentStep: ChallengeStep;
-  encryptSolved: boolean;
-  decryptSolved: boolean;
-  hintsRevealedEncrypt: number;
-  hintsRevealedDecrypt: number;
+  /** True when this DECRYPT challenge uses the ciphertext produced in the preceding Mixed ENCRYPT challenge */
+  fromPreviousMixedEncrypt?: boolean;
+  solved: boolean;
+  hintsRevealed: number;
   attempts: number;
   rewardCredits: number;
 }
@@ -160,6 +170,9 @@ export interface LogEntry {
 export interface GameSession {
   id: string;
   mode: GameMode;
+  challengeType: ChallengeType;
+  mixedNextStep: ChallengeStep;
+  pendingMixedCipher: MixedCipherSource | null;
   phase: GamePhase;
   mathKeys: SessionMathKeys;
   players: PlayerState[];
@@ -181,6 +194,7 @@ export interface GameSession {
 export interface MatchSummaryRecord {
   id: string;
   mode: GameMode;
+  challengeType?: ChallengeType;
   finishedAt: number;
   durationSeconds: number;
   winnerName: string;

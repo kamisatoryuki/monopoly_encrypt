@@ -12,6 +12,7 @@ import { DISTRICT_COLOR_STYLES } from '../data/cryptoniaLore';
 import { findTileOwner } from '../engine/gameEngine';
 import {
   BoardTile,
+  ChallengeType,
   CryptoniaCard,
   DiceRoll,
   GamePhase,
@@ -32,6 +33,7 @@ interface Board40Props {
   lastDice: DiceRoll | null;
   pendingCard: CryptoniaCard | null;
   mathKeys: SessionMathKeys;
+  challengeType: ChallengeType;
   isMoving: boolean;
   isPaused: boolean;
   onRollDice: () => void;
@@ -80,6 +82,7 @@ export const Board40: React.FC<Board40Props> = ({
   lastDice,
   pendingCard,
   mathKeys,
+  challengeType,
   isMoving,
   isPaused,
   onRollDice,
@@ -278,7 +281,11 @@ export const Board40: React.FC<Board40Props> = ({
 
               {/* Compact FormulaBox inside Board Center on >= sm */}
               <div className="hidden sm:block">
-                <FormulaBox keys={mathKeys} variant="compact" />
+                <FormulaBox
+                  keys={mathKeys}
+                  variant="compact"
+                  challengeType={challengeType}
+                />
               </div>
             </div>
 

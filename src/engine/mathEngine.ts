@@ -1,6 +1,8 @@
 import {
   ChallengeStep,
   ChallengeTrigger,
+  ChallengeType,
+  MixedCipherSource,
   PairedChallenge,
   SessionMathKeys,
 } from '../types/game';
@@ -334,6 +336,64 @@ export function parseCiphertextInput(raw: string): {
   return { valid: true, numbers };
 }
 
+export function createChallenge(params: {
+  id: string;
+  challengeType: ChallengeType;
+  step: ChallengeStep;
+  trigger: ChallengeTrigger;
+  targetTileId?: number;
+  title: string;
+  contextNote: string;
+  rawPlaintext: string;
+  keys: SessionMathKeys;
+  rewardCredits: number;
+  previousMixedSource?: MixedCipherSource | null;
+}): PairedChallenge {
+  if (
+    params.step === 'DECRYPT' &&
+    params.previousMixedSource
+  ) {
+    return {
+      id: params.id,
+      challengeType: params.challengeType,
+      trigger: params.trigger,
+      targetTileId: params.targetTileId,
+      title: params.title,
+      contextNote: params.contextNote,
+      plaintext: params.previousMixedSource.plaintext,
+      plainCodes: params.previousMixedSource.plainCodes,
+      cipherNumbers: params.previousMixedSource.cipherNumbers,
+      cipherText: params.previousMixedSource.cipherText,
+      currentStep: 'DECRYPT',
+      fromPreviousMixedEncrypt: true,
+      solved: false,
+      hintsRevealed: 0,
+      attempts: 0,
+      rewardCredits: params.rewardCredits,
+    };
+  }
+
+  const enc = encryptText(params.rawPlaintext, params.keys);
+  return {
+    id: params.id,
+    challengeType: params.challengeType,
+    trigger: params.trigger,
+    targetTileId: params.targetTileId,
+    title: params.title,
+    contextNote: params.contextNote,
+    plaintext: enc.normalizedPlaintext,
+    plainCodes: enc.plainCodes,
+    cipherNumbers: enc.cipherNumbers,
+    cipherText: enc.cipherText,
+    currentStep: params.step,
+    fromPreviousMixedEncrypt: false,
+    solved: false,
+    hintsRevealed: 0,
+    attempts: 0,
+    rewardCredits: params.rewardCredits,
+  };
+}
+
 export function createPairedChallenge(params: {
   id: string;
   trigger: ChallengeTrigger;
@@ -344,25 +404,11 @@ export function createPairedChallenge(params: {
   keys: SessionMathKeys;
   rewardCredits: number;
 }): PairedChallenge {
-  const enc = encryptText(params.rawPlaintext, params.keys);
-  return {
-    id: params.id,
-    trigger: params.trigger,
-    targetTileId: params.targetTileId,
-    title: params.title,
-    contextNote: params.contextNote,
-    plaintext: enc.normalizedPlaintext,
-    plainCodes: enc.plainCodes,
-    cipherNumbers: enc.cipherNumbers,
-    cipherText: enc.cipherText,
-    currentStep: 'ENCRYPT',
-    encryptSolved: false,
-    decryptSolved: false,
-    hintsRevealedEncrypt: 0,
-    hintsRevealedDecrypt: 0,
-    attempts: 0,
-    rewardCredits: params.rewardCredits,
-  };
+  return createChallenge({
+    ...params,
+    challengeType: 'mixed',
+    step: 'ENCRYPT',
+  });
 }
 
 export function validateEncryptSubmission(

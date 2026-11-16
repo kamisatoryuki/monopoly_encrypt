@@ -1,6 +1,11 @@
 import { CryptoniaStory } from '../types/story';
 
-export const STORY_ASSET_PATH = '/assets/aistudio/story_3ebc4ce9.json';
+const baseUrl =
+  typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL
+    ? import.meta.env.BASE_URL
+    : '/';
+
+export const STORY_ASSET_PATH = `${baseUrl}assets/aistudio/story_3ebc4ce9.json`;
 
 export const DEFAULT_CRYPTONIA_STORY: CryptoniaStory = {
   title: 'THE LOST CIPHER',

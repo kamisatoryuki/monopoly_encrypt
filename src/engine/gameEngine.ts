@@ -5,7 +5,9 @@ import {
 } from '../data/cryptoniaLore';
 import {
   BoardTile,
+  ChallengeStep,
   ChallengeTrigger,
+  ChallengeType,
   CryptoniaLoreConfig,
   DiceRoll,
   GameMode,
@@ -16,9 +18,15 @@ import {
   TokenShape,
 } from '../types/game';
 import {
-  createPairedChallenge,
+  createChallenge,
   generateSessionMathKeys,
 } from './mathEngine';
+
+export function formatChallengeTypeLabel(type: ChallengeType): string {
+  if (type === 'encryption') return 'Encryption Only';
+  if (type === 'decryption') return 'Decryption Only';
+  return 'Mixed';
+}
 
 export const PLAYER_PALETTE: { color: string; shape: TokenShape; label: string }[] = [
   { color: '#06B6D4', shape: 'hex', label: 'Cyan' },
@@ -60,9 +68,11 @@ export function createLog(
 
 export function createNewSession(params: {
   mode: GameMode;
+  challengeType?: ChallengeType;
   playerNames: string[];
   lore?: CryptoniaLoreConfig;
 }): GameSession {
+  const challengeType: ChallengeType = params.challengeType ?? 'mixed';
   const mathKeys = generateSessionMathKeys();
   const cleanNames =
     params.mode === 'solo'
@@ -91,9 +101,14 @@ export function createNewSession(params: {
     };
   });
 
+  const typeLabel = formatChallengeTypeLabel(challengeType);
+
   return {
     id: `session-${Date.now()}`,
     mode: params.mode,
+    challengeType,
+    mixedNextStep: challengeType === 'decryption' ? 'DECRYPT' : 'ENCRYPT',
+    pendingMixedCipher: null,
     phase: 'READY_ROLL',
     mathKeys,
     players,
@@ -119,8 +134,8 @@ export function createNewSession(params: {
     logs: [
       createLog(
         params.mode === 'solo'
-          ? 'Sesi Demo Solo dimulai (durasi 05:00). Kunci fungsi linear sesi telah diacak.'
-          : `Sesi Classic Mode dimulai (${players.length} pemain). Kunci fungsi linear sesi telah diacak.`,
+          ? `Sesi Demo Solo (${typeLabel}) dimulai (durasi 05:00). Kunci fungsi linear sesi telah diacak.`
+          : `Sesi Classic Mode (${typeLabel}, ${players.length} pemain) dimulai. Kunci fungsi linear sesi telah diacak.`,
         'accent'
       ),
     ],
@@ -207,47 +222,104 @@ export function calculatePlayerNetWorth(
   return player.balance + propertyValue;
 }
 
+export function resolveNextChallengeStep(session: GameSession): ChallengeStep {
+  if (session.challengeType === 'encryption') return 'ENCRYPT';
+  if (session.challengeType === 'decryption') return 'DECRYPT';
+  if (session.mixedNextStep === 'DECRYPT' && session.pendingMixedCipher) {
+    return 'DECRYPT';
+  }
+  return 'ENCRYPT';
+}
+
 export function buildChallengeForTrigger(params: {
   session: GameSession;
   trigger: ChallengeTrigger;
   tile?: BoardTile;
   rewardCredits?: number;
   lore?: CryptoniaLoreConfig;
-}): { challenge: ReturnType<typeof createPairedChallenge>; nextUsedIndices: number[] } {
-  const { phrase, nextUsedIndices } = pickNextPhrase(
-    params.session,
-    params.lore
-  );
+}): {
+  challenge: ReturnType<typeof createChallenge>;
+  nextUsedIndices: number[];
+} {
+  const step = resolveNextChallengeStep(params.session);
+  const usingPreviousMixed =
+    params.session.challengeType === 'mixed' &&
+    step === 'DECRYPT' &&
+    Boolean(params.session.pendingMixedCipher);
+
+  const picked = usingPreviousMixed
+    ? {
+        phrase: params.session.pendingMixedCipher!.plaintext,
+        nextUsedIndices: params.session.usedPhraseIndices,
+      }
+    : pickNextPhrase(params.session, params.lore);
 
   const titleMap: Record<ChallengeTrigger, string> = {
-    BUY_PROPERTY: `Verifikasi Pembelian · ${params.tile?.name || 'Properti'}`,
-    SPECIAL_TILE: `Petak Tantangan · ${params.tile?.name || 'Tantangan Khusus'}`,
-    SPECIAL_CARD: 'Kartu Dekripsi Spesial',
-    JAIL_ESCAPE: 'Tantangan Bebas Penjara',
+    BUY_PROPERTY: `Verifikasi Pembelian · ${params.tile?.name || 'Wilayah'}`,
+    SPECIAL_TILE: `Petak Tantangan · ${params.tile?.name || 'Tantangan Sandi'}`,
+    SPECIAL_CARD: 'Dekripsi / Enkripsi Kartu Spesial',
+    JAIL_ESCAPE: 'Tantangan Bebas Detensi',
   };
+
+  const stepActionText =
+    step === 'ENCRYPT'
+      ? 'enkripsi teks asli memakai komposisi (g ∘ f)(x)'
+      : usingPreviousMixed
+      ? 'dekripsi ciphertext dari tantangan enkripsi sebelumnya memakai invers (g ∘ f)⁻¹(y)'
+      : 'dekripsi ciphertext memakai fungsi invers (g ∘ f)⁻¹(y)';
 
   const contextMap: Record<ChallengeTrigger, string> = {
-    BUY_PROPERTY: `Selesaikan pasangan enkripsi (g ∘ f)(x) lalu dekripsi inversnya untuk membuka hak beli properti (${params.tile?.price ?? 0} Kredit).`,
-    SPECIAL_TILE:
-      'Selesaikan enkripsi lalu dekripsi ciphertext yang sama untuk meraih bonus kredit Demo Solo.',
-    SPECIAL_CARD:
-      'Validasi sinyal kartu dengan enkripsi komposisi dan dekripsi invers untuk mengklaim hadiah kartu.',
-    JAIL_ESCAPE:
-      'Buktikan kelayakan pembebasan dengan mengenkripsi lalu mendekripsi ulang kata sandi ini.',
+    BUY_PROPERTY: `Selesaikan ${stepActionText} untuk membuka hak beli wilayah (${params.tile?.price ?? 0} Kredit).`,
+    SPECIAL_TILE: `Selesaikan ${stepActionText} untuk meraih bonus ${params.rewardCredits ?? 150} Kredit.`,
+    SPECIAL_CARD: `Selesaikan ${stepActionText} untuk mengklaim hadiah kartu sebesar ${params.rewardCredits ?? 150} Kredit.`,
+    JAIL_ESCAPE: `Selesaikan ${stepActionText} untuk bebas dari Pusat Detensi.`,
   };
 
-  const challenge = createPairedChallenge({
+  const challenge = createChallenge({
     id: `chg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    challengeType: params.session.challengeType,
+    step,
     trigger: params.trigger,
     targetTileId: params.tile?.id,
     title: titleMap[params.trigger],
     contextNote: contextMap[params.trigger],
-    rawPlaintext: phrase,
+    rawPlaintext: picked.phrase,
     keys: params.session.mathKeys,
     rewardCredits: params.rewardCredits ?? 120,
+    previousMixedSource: usingPreviousMixed
+      ? params.session.pendingMixedCipher
+      : null,
   });
 
-  return { challenge, nextUsedIndices };
+  return { challenge, nextUsedIndices: picked.nextUsedIndices };
+}
+
+export function getNextMixedStateOnSolve(session: GameSession): {
+  mixedNextStep: ChallengeStep;
+  pendingMixedCipher: GameSession['pendingMixedCipher'];
+} {
+  const chg = session.activeChallenge;
+  if (!chg || session.challengeType !== 'mixed') {
+    return {
+      mixedNextStep: session.mixedNextStep,
+      pendingMixedCipher: session.pendingMixedCipher,
+    };
+  }
+  if (chg.currentStep === 'ENCRYPT') {
+    return {
+      mixedNextStep: 'DECRYPT',
+      pendingMixedCipher: {
+        plaintext: chg.plaintext,
+        plainCodes: chg.plainCodes,
+        cipherNumbers: chg.cipherNumbers,
+        cipherText: chg.cipherText,
+      },
+    };
+  }
+  return {
+    mixedNextStep: 'ENCRYPT',
+    pendingMixedCipher: null,
+  };
 }
 
 export function findTileOwner(
@@ -291,6 +363,7 @@ export function buildMatchSummaryRecord(
   return {
     id: session.id,
     mode: session.mode,
+    challengeType: session.challengeType,
     finishedAt: Date.now(),
     durationSeconds,
     winnerName: top?.name || 'Pemain',

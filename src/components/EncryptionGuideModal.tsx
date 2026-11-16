@@ -1,13 +1,14 @@
 import React from 'react';
 import { X, BookOpen } from 'lucide-react';
 import { encryptText, decryptNumbers } from '../engine/mathEngine';
-import { SessionMathKeys } from '../types/game';
+import { ChallengeType, SessionMathKeys } from '../types/game';
 import { FormulaBox } from './FormulaBox';
 
 interface EncryptionGuideModalProps {
   isOpen: boolean;
   onClose: () => void;
   mathKeys: SessionMathKeys;
+  challengeType?: ChallengeType;
 }
 
 const ALPHABET_MAP: { label: string; code: number }[] = [
@@ -22,6 +23,7 @@ export const EncryptionGuideModal: React.FC<EncryptionGuideModalProps> = ({
   isOpen,
   onClose,
   mathKeys,
+  challengeType = 'mixed',
 }) => {
   if (!isOpen) return null;
 
@@ -59,9 +61,13 @@ export const EncryptionGuideModal: React.FC<EncryptionGuideModalProps> = ({
             <h3 className="text-base font-semibold text-white">
               1. Rumus Standar Sesi Aktif
             </h3>
-            <FormulaBox keys={mathKeys} variant="session-overview" />
+            <FormulaBox
+              keys={mathKeys}
+              variant="session-overview"
+              challengeType={challengeType}
+            />
             <p className="text-slate-400">
-              Seluruh enkripsi menggunakan urutan komposisi{' '}
+              Seluruh enkripsi menggunakan komposisi{' '}
               <span className="font-mono text-cyan-300">(g ∘ f)(x) = g(f(x))</span>{' '}
               (hitung <span className="font-mono">f(x)</span> terlebih dahulu, lalu
               masukkan hasilnya ke <span className="font-mono">g</span>). Untuk
@@ -75,7 +81,54 @@ export const EncryptionGuideModal: React.FC<EncryptionGuideModalProps> = ({
 
           <section className="space-y-3">
             <h3 className="text-base font-semibold text-white">
-              2. Tabel Kuantifikasi Karakter (0–26)
+              2. Pilihan Jenis Tantangan (Challenge Type)
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+              <div
+                className={`rounded-lg border p-3 space-y-1 ${
+                  challengeType === 'encryption'
+                    ? 'border-cyan-500/60 bg-cyan-950/25'
+                    : 'border-slate-800 bg-[#0D1526]'
+                }`}
+              >
+                <div className="font-semibold text-white">Encryption Only</div>
+                <p className="text-slate-400">
+                  Hanya menampilkan teks asli dan meminta angka ciphertext
+                  menggunakan (g ∘ f)(x).
+                </p>
+              </div>
+              <div
+                className={`rounded-lg border p-3 space-y-1 ${
+                  challengeType === 'decryption'
+                    ? 'border-amber-500/60 bg-amber-950/25'
+                    : 'border-slate-800 bg-[#0D1526]'
+                }`}
+              >
+                <div className="font-semibold text-white">Decryption Only</div>
+                <p className="text-slate-400">
+                  Hanya menampilkan ciphertext dan meminta teks asli menggunakan
+                  invers (g ∘ f)⁻¹(y).
+                </p>
+              </div>
+              <div
+                className={`rounded-lg border p-3 space-y-1 ${
+                  challengeType === 'mixed'
+                    ? 'border-emerald-500/60 bg-emerald-950/25'
+                    : 'border-slate-800 bg-[#0D1526]'
+                }`}
+              >
+                <div className="font-semibold text-white">Mixed (Bergantian)</div>
+                <p className="text-slate-400">
+                  Pola Enkripsi → Dekripsi → Enkripsi → Dekripsi. Setiap dekripsi
+                  memakai ciphertext dari enkripsi sebelumnya.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section className="space-y-3">
+            <h3 className="text-base font-semibold text-white">
+              3. Tabel Kuantifikasi Karakter (0–26)
             </h3>
             <FormulaBox keys={mathKeys} variant="codec-rules" />
             <div className="grid grid-cols-5 sm:grid-cols-9 gap-1.5 font-mono text-xs tabular-nums">
@@ -97,12 +150,14 @@ export const EncryptionGuideModal: React.FC<EncryptionGuideModalProps> = ({
 
           <section className="space-y-3">
             <h3 className="text-base font-semibold text-white">
-              3. Contoh Multi-Kata dengan Spasi (&ldquo;{samplePhrase}&rdquo;)
+              4. Contoh Multi-Kata dengan Spasi (&ldquo;{samplePhrase}&rdquo;)
             </h3>
             <div className="rounded-lg border border-slate-800 bg-[#0D1526] p-4 space-y-3">
               <div className="text-xs text-slate-400">
-                Aturan pemisah: gunakan <strong className="text-slate-200">koma (,)</strong> antar
-                setiap angka ciphertext. Jangan gunakan slash (<span className="font-mono">/</span>).
+                Aturan pemisah: gunakan{' '}
+                <strong className="text-slate-200">koma (,)</strong> antar setiap
+                angka ciphertext. Jangan gunakan slash (
+                <span className="font-mono">/</span>).
               </div>
 
               <div className="space-y-2 font-mono text-xs tabular-nums">
@@ -131,7 +186,9 @@ export const EncryptionGuideModal: React.FC<EncryptionGuideModalProps> = ({
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-400">Hasil dekripsi (0 → spasi): </span>
+                  <span className="text-slate-400">
+                    Hasil dekripsi (0 → spasi):{' '}
+                  </span>
                   <span className="font-mono font-semibold text-emerald-300">
                     &ldquo;{decSample.plaintext}&rdquo;
                   </span>

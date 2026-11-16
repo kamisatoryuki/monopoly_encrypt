@@ -11,8 +11,12 @@ import {
   AlertCircle,
   BarChart3,
 } from 'lucide-react';
-import { PLAYER_PALETTE } from '../engine/gameEngine';
 import {
+  formatChallengeTypeLabel,
+  PLAYER_PALETTE,
+} from '../engine/gameEngine';
+import {
+  ChallengeType,
   CryptoniaLoreConfig,
   GameMode,
   GameSession,
@@ -30,7 +34,13 @@ interface HomeSetupViewProps {
   previewKeys: SessionMathKeys;
   savedSession: GameSession | null;
   matchHistory: MatchSummaryRecord[];
-  onStartGame: (mode: GameMode, playerNames: string[]) => void;
+  onStartGame: (
+    mode: GameMode,
+    challengeType: ChallengeType,
+    playerNames: string[]
+  ) => void;
+  selectedChallengeType: ChallengeType;
+  onChangeChallengeType: (type: ChallengeType) => void;
   onResumeSavedSession: () => void;
   onDiscardSavedSession: () => void;
   onOpenGuide: () => void;
@@ -44,6 +54,8 @@ export const HomeSetupView: React.FC<HomeSetupViewProps> = ({
   previewKeys,
   savedSession,
   matchHistory,
+  selectedChallengeType,
+  onChangeChallengeType,
   onStartGame,
   onResumeSavedSession,
   onDiscardSavedSession,
@@ -91,7 +103,7 @@ export const HomeSetupView: React.FC<HomeSetupViewProps> = ({
         setSetupError(story.setup.invalidNames);
         return;
       }
-      onStartGame('solo', [trimmed]);
+      onStartGame('solo', selectedChallengeType, [trimmed]);
       return;
     }
 
@@ -106,7 +118,7 @@ export const HomeSetupView: React.FC<HomeSetupViewProps> = ({
       return;
     }
 
-    onStartGame('classic', activeNames);
+    onStartGame('classic', selectedChallengeType, activeNames);
   };
 
   return (
@@ -117,7 +129,8 @@ export const HomeSetupView: React.FC<HomeSetupViewProps> = ({
           <div className="space-y-1">
             <div className="text-xs font-medium text-cyan-300">
               {story.menu.continueGame} ·{' '}
-              {savedSession.mode === 'solo' ? 'Demo Solo' : 'Classic Mode'}
+              {savedSession.mode === 'solo' ? 'Demo Solo' : 'Classic Mode'} ·{' '}
+              {formatChallengeTypeLabel(savedSession.challengeType)}
             </div>
             <div className="text-sm font-semibold text-white">
               {savedSession.mode === 'solo' && savedSession.soloTimer
@@ -215,7 +228,11 @@ export const HomeSetupView: React.FC<HomeSetupViewProps> = ({
                 </button>
               </div>
             </div>
-            <FormulaBox keys={previewKeys} variant="session-overview" />
+            <FormulaBox
+              keys={previewKeys}
+              variant="session-overview"
+              challengeType={selectedChallengeType}
+            />
             <FormulaBox keys={previewKeys} variant="codec-rules" />
           </div>
         </div>
@@ -234,37 +251,78 @@ export const HomeSetupView: React.FC<HomeSetupViewProps> = ({
             </div>
 
             {/* Mode Segmented Toggle */}
-            <div className="grid grid-cols-2 gap-2 rounded-lg bg-[#0B1120] p-1 border border-slate-800">
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedMode('classic');
-                  setSetupError(null);
-                }}
-                className={`flex items-center justify-center gap-2 rounded-md px-3 py-2.5 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
-                  selectedMode === 'classic'
-                    ? 'bg-cyan-500 text-slate-950 font-semibold'
-                    : 'text-slate-300 hover:text-white'
-                }`}
-              >
-                <Users className="h-4 w-4" />
-                Classic Mode
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedMode('solo');
-                  setSetupError(null);
-                }}
-                className={`flex items-center justify-center gap-2 rounded-md px-3 py-2.5 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
-                  selectedMode === 'solo'
-                    ? 'bg-cyan-500 text-slate-950 font-semibold'
-                    : 'text-slate-300 hover:text-white'
-                }`}
-              >
-                <Timer className="h-4 w-4" />
-                Demo Solo (05:00)
-              </button>
+            <div className="space-y-1.5">
+              <div className="text-xs font-medium text-slate-300">
+                Mode Papan
+              </div>
+              <div className="grid grid-cols-2 gap-2 rounded-lg bg-[#0B1120] p-1 border border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedMode('classic');
+                    setSetupError(null);
+                  }}
+                  className={`flex items-center justify-center gap-2 rounded-md px-3 py-2.5 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
+                    selectedMode === 'classic'
+                      ? 'bg-cyan-500 text-slate-950 font-semibold'
+                      : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  <Users className="h-4 w-4" />
+                  Classic Mode
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedMode('solo');
+                    setSetupError(null);
+                  }}
+                  className={`flex items-center justify-center gap-2 rounded-md px-3 py-2.5 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
+                    selectedMode === 'solo'
+                      ? 'bg-cyan-500 text-slate-950 font-semibold'
+                      : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  <Timer className="h-4 w-4" />
+                  Demo Solo (05:00)
+                </button>
+              </div>
+            </div>
+
+            {/* Independent Challenge Type Selector */}
+            <div className="space-y-1.5">
+              <div className="text-xs font-medium text-slate-300">
+                Jenis Tantangan (Challenge Type)
+              </div>
+              <div className="grid grid-cols-3 gap-1.5 rounded-lg bg-[#0B1120] p-1 border border-slate-800">
+                {(
+                  [
+                    { id: 'encryption', label: 'Encryption Only' },
+                    { id: 'decryption', label: 'Decryption Only' },
+                    { id: 'mixed', label: 'Mixed' },
+                  ] as const
+                ).map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => onChangeChallengeType(opt.id)}
+                    className={`rounded-md px-2 py-2 text-[11px] sm:text-xs font-medium transition-colors whitespace-nowrap ${
+                      selectedChallengeType === opt.id
+                        ? 'bg-amber-400 text-slate-950 font-semibold'
+                        : 'text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                {selectedChallengeType === 'encryption'
+                  ? 'Hanya mengerjakan soal komposisi/enkripsi (teks asli → ciphertext).'
+                  : selectedChallengeType === 'decryption'
+                  ? 'Hanya mengerjakan soal invers/dekripsi (ciphertext → teks asli).'
+                  : 'Bergantian Enkripsi → Dekripsi; setiap soal dekripsi memakai ciphertext dari soal enkripsi sebelumnya.'}
+              </p>
             </div>
 
             {selectedMode === 'classic' ? (

@@ -8,6 +8,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
+import { formatChallengeTypeLabel } from '../engine/gameEngine';
 import {
   decryptNumbers,
   encryptText,
@@ -22,10 +23,9 @@ interface ChallengeModalProps {
   challenge: PairedChallenge;
   mathKeys: SessionMathKeys;
   isPaused?: boolean;
-  onUseHint: (step: 'ENCRYPT' | 'DECRYPT') => void;
-  onEncryptSuccess: () => void;
+  onUseHint: () => void;
   onAttemptRecorded: () => void;
-  onCompletePair: () => void;
+  onCompleteChallenge: () => void;
   onForfeit: () => void;
 }
 
@@ -39,9 +39,8 @@ export const ChallengeModal: React.FC<ChallengeModalProps> = ({
   mathKeys,
   isPaused = false,
   onUseHint,
-  onEncryptSuccess,
   onAttemptRecorded,
-  onCompletePair,
+  onCompleteChallenge,
   onForfeit,
 }) => {
   const [inputValue, setInputValue] = useState('');
@@ -49,34 +48,36 @@ export const ChallengeModal: React.FC<ChallengeModalProps> = ({
     type: 'error' | 'success';
     text: string;
   } | null>(null);
-  const [stepSolvedPendingAdvance, setStepSolvedPendingAdvance] =
-    useState(false);
+  const [solvedLocal, setSolvedLocal] = useState(false);
   const [showTable, setShowTable] = useState(false);
 
   const step = challenge.currentStep;
   const hints = getChallengeHints(step, challenge, mathKeys);
-  const revealedCount =
-    step === 'ENCRYPT'
-      ? challenge.hintsRevealedEncrypt
-      : challenge.hintsRevealedDecrypt;
+  const revealedCount = challenge.hintsRevealed;
 
   useEffect(() => {
     setInputValue('');
     setFeedback(null);
-    setStepSolvedPendingAdvance(false);
+    setSolvedLocal(false);
   }, [challenge.id, step]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (isPaused || stepSolvedPendingAdvance) return;
+    if (isPaused || solvedLocal) return;
 
     onAttemptRecorded();
 
     if (step === 'ENCRYPT') {
       const res = validateEncryptSubmission(inputValue, challenge);
       if (res.isValid) {
-        setFeedback({ type: 'success', text: res.message });
-        setStepSolvedPendingAdvance(true);
+        setFeedback({
+          type: 'success',
+          text:
+            challenge.challengeType === 'mixed'
+              ? 'Enkripsi (g ∘ f)(x) tepat! Ciphertext ini akan digunakan pada tantangan dekripsi berikutnya.'
+              : 'Enkripsi (g ∘ f)(x) tepat!',
+        });
+        setSolvedLocal(true);
       } else {
         setFeedback({ type: 'error', text: res.message });
       }
@@ -86,7 +87,7 @@ export const ChallengeModal: React.FC<ChallengeModalProps> = ({
     const res = validateDecryptSubmission(inputValue, challenge);
     if (res.isValid) {
       setFeedback({ type: 'success', text: res.message });
-      setStepSolvedPendingAdvance(true);
+      setSolvedLocal(true);
     } else {
       setFeedback({ type: 'error', text: res.message });
     }
@@ -94,7 +95,7 @@ export const ChallengeModal: React.FC<ChallengeModalProps> = ({
 
   const handleRevealHint = () => {
     if (revealedCount >= 3 || isPaused) return;
-    onUseHint(step);
+    onUseHint();
   };
 
   const encPreview = encryptText(challenge.plaintext, mathKeys);
@@ -118,10 +119,10 @@ export const ChallengeModal: React.FC<ChallengeModalProps> = ({
                 <Unlock className="h-3.5 w-3.5 text-amber-300" />
               )}
               <span>
-                Tantangan Berpasangan ·{' '}
+                {formatChallengeTypeLabel(challenge.challengeType)} ·{' '}
                 {step === 'ENCRYPT'
-                  ? 'Tahap 1/2: Enkripsi (g ∘ f)(x)'
-                  : 'Tahap 2/2: Dekripsi (g ∘ f)⁻¹(y)'}
+                  ? 'Enkripsi (g ∘ f)(x)'
+                  : 'Dekripsi (g ∘ f)⁻¹(y)'}
               </span>
             </div>
             <h2
@@ -132,28 +133,11 @@ export const ChallengeModal: React.FC<ChallengeModalProps> = ({
             </h2>
           </div>
 
-          <div className="flex items-center gap-1.5 text-xs font-mono tabular-nums">
-            <span
-              className={`rounded px-2 py-1 border ${
-                challenge.encryptSolved
-                  ? 'border-emerald-500/40 bg-emerald-950/40 text-emerald-300'
-                  : 'border-cyan-500/50 bg-cyan-950/40 text-cyan-200'
-              }`}
-            >
-              1. Enkripsi
-            </span>
-            <span className="text-slate-600">→</span>
-            <span
-              className={`rounded px-2 py-1 border ${
-                challenge.decryptSolved
-                  ? 'border-emerald-500/40 bg-emerald-950/40 text-emerald-300'
-                  : step === 'DECRYPT'
-                  ? 'border-amber-500/50 bg-amber-950/40 text-amber-200'
-                  : 'border-slate-800 bg-slate-900 text-slate-500'
-              }`}
-            >
-              2. Dekripsi
-            </span>
+          <div className="font-mono text-xs text-slate-400">
+            {step === 'ENCRYPT' ? 'Komposisi' : 'Invers'}
+            {challenge.fromPreviousMixedEncrypt
+              ? ' · Ciphertext Sebelumnya'
+              : ''}
           </div>
         </div>
 
@@ -162,13 +146,14 @@ export const ChallengeModal: React.FC<ChallengeModalProps> = ({
             {challenge.contextNote}
           </p>
 
-          {/* Consistent FormulaBox */}
+          {/* Consistent FormulaBox tailored to active challenge step */}
           <FormulaBox
             keys={mathKeys}
             variant={step === 'ENCRYPT' ? 'composition' : 'inverse'}
+            challengeType={challenge.challengeType}
           />
 
-          {/* Challenge Prompt Box */}
+          {/* Challenge Prompt Box — Strictly shows only plaintext (ENCRYPT) or only ciphertext (DECRYPT) */}
           <div className="rounded-lg border border-slate-700/90 bg-[#0B1120] p-4 space-y-2.5">
             {step === 'ENCRYPT' ? (
               <>
@@ -200,7 +185,9 @@ export const ChallengeModal: React.FC<ChallengeModalProps> = ({
               <>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-xs font-medium text-amber-300">
-                    Ciphertext yang Sama untuk Didekripsi:
+                    {challenge.fromPreviousMixedEncrypt
+                      ? 'Ciphertext dari Tantangan Enkripsi Sebelumnya:'
+                      : 'Ciphertext untuk Didekripsi:'}
                   </span>
                   <span className="font-mono text-xs text-slate-400 tabular-nums">
                     {challenge.cipherNumbers.length} angka · 0 = Spasi
@@ -261,7 +248,7 @@ export const ChallengeModal: React.FC<ChallengeModalProps> = ({
                 id="challenge-answer-input"
                 type="text"
                 value={inputValue}
-                disabled={isPaused || stepSolvedPendingAdvance}
+                disabled={isPaused || solvedLocal}
                 onChange={(e) => setInputValue(e.target.value)}
                 placeholder={
                   step === 'ENCRYPT'
@@ -290,8 +277,8 @@ export const ChallengeModal: React.FC<ChallengeModalProps> = ({
               </div>
             )}
 
-            {/* Short Mathematical Explanation after solving step */}
-            {stepSolvedPendingAdvance && (
+            {/* Short Mathematical Explanation after solving */}
+            {solvedLocal && (
               <div className="rounded-lg border border-emerald-500/30 bg-[#0D1526] p-3.5 space-y-2">
                 <div className="text-xs font-semibold text-emerald-300">
                   Pembahasan Singkat
@@ -353,7 +340,7 @@ export const ChallengeModal: React.FC<ChallengeModalProps> = ({
             {/* Action Buttons */}
             <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
               <div className="flex flex-wrap items-center gap-2">
-                {!stepSolvedPendingAdvance && (
+                {!solvedLocal && (
                   <button
                     type="button"
                     onClick={handleRevealHint}
@@ -367,7 +354,7 @@ export const ChallengeModal: React.FC<ChallengeModalProps> = ({
                   </button>
                 )}
 
-                {!stepSolvedPendingAdvance && (
+                {!solvedLocal && (
                   <button
                     type="button"
                     onClick={onForfeit}
@@ -378,7 +365,7 @@ export const ChallengeModal: React.FC<ChallengeModalProps> = ({
                 )}
               </div>
 
-              {!stepSolvedPendingAdvance ? (
+              {!solvedLocal ? (
                 <button
                   type="submit"
                   disabled={isPaused}
@@ -386,18 +373,10 @@ export const ChallengeModal: React.FC<ChallengeModalProps> = ({
                 >
                   {step === 'ENCRYPT' ? 'Periksa Enkripsi' : 'Periksa Dekripsi'}
                 </button>
-              ) : step === 'ENCRYPT' ? (
-                <button
-                  type="button"
-                  onClick={onEncryptSuccess}
-                  className="rounded-lg bg-amber-400 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-amber-300 whitespace-nowrap"
-                >
-                  Lanjut ke Dekripsi Invers
-                </button>
               ) : (
                 <button
                   type="button"
-                  onClick={onCompletePair}
+                  onClick={onCompleteChallenge}
                   className="rounded-lg bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-400 whitespace-nowrap"
                 >
                   Selesaikan & Klaim Hasil

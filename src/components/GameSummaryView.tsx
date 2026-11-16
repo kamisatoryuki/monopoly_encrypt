@@ -1,6 +1,9 @@
 import React from 'react';
 import { Trophy, RotateCcw, Home, CheckCircle2 } from 'lucide-react';
-import { calculatePlayerNetWorth } from '../engine/gameEngine';
+import {
+  calculatePlayerNetWorth,
+  formatChallengeTypeLabel,
+} from '../engine/gameEngine';
 import { BoardTile, GameSession } from '../types/game';
 import { CryptoniaStory } from '../types/story';
 import { FormulaBox } from './FormulaBox';
@@ -48,7 +51,8 @@ export const GameSummaryView: React.FC<GameSummaryViewProps> = ({
               <span>
                 {session.mode === 'solo'
                   ? 'Hasil Demo Solo (5 Menit)'
-                  : story.winner.title}
+                  : story.winner.title}{' '}
+                · {formatChallengeTypeLabel(session.challengeType)}
               </span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold text-white">
@@ -175,6 +179,7 @@ export const GameSummaryView: React.FC<GameSummaryViewProps> = ({
         <FormulaBox
           keys={session.mathKeys}
           variant="session-overview"
+          challengeType={session.challengeType}
           title="Kunci Fungsi Linear yang Digunakan pada Sesi Ini"
         />
 

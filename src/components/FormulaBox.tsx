@@ -1,5 +1,5 @@
 import React from 'react';
-import { SessionMathKeys } from '../types/game';
+import { ChallengeType, SessionMathKeys } from '../types/game';
 
 export type FormulaVariant =
   | 'session-overview'
@@ -11,6 +11,7 @@ export type FormulaVariant =
 interface FormulaBoxProps {
   keys: SessionMathKeys;
   variant?: FormulaVariant;
+  challengeType?: ChallengeType;
   title?: string;
   className?: string;
 }
@@ -35,12 +36,23 @@ function Fraction({
 export const FormulaBox: React.FC<FormulaBoxProps> = ({
   keys,
   variant = 'session-overview',
+  challengeType = 'mixed',
   title,
   className = '',
 }) => {
   const { a, b, c, d } = keys;
   const composedCoef = c * a;
   const composedConst = c * b + d;
+
+  const showEncryptFormula = challengeType !== 'decryption';
+  const showDecryptFormula = challengeType !== 'encryption';
+
+  const modeBadgeLabel =
+    challengeType === 'encryption'
+      ? 'Encryption Only · (g ∘ f)(x)'
+      : challengeType === 'decryption'
+      ? 'Decryption Only · (g ∘ f)⁻¹(y)'
+      : 'Mixed · Komposisi & Invers';
 
   return (
     <div
@@ -50,7 +62,7 @@ export const FormulaBox: React.FC<FormulaBoxProps> = ({
         <div className="mb-2.5 flex items-center justify-between gap-2 text-xs font-medium text-cyan-300">
           <span>{title}</span>
           <span className="font-mono text-[11px] text-slate-400">
-            Linear · Komposisi (g ∘ f)
+            {modeBadgeLabel}
           </span>
         </div>
       )}
@@ -69,12 +81,26 @@ export const FormulaBox: React.FC<FormulaBoxProps> = ({
               {c}x + {d}
             </span>
           </div>
-          <div className="mt-1 border-t border-slate-800 pt-1.5 flex items-center justify-between gap-2">
-            <span className="text-cyan-300">(g ∘ f)(x)</span>
-            <span className="text-cyan-200 font-semibold">
-              {c}({a}x + {b}) + {d}
-            </span>
-          </div>
+          {showEncryptFormula && (
+            <div className="mt-1 border-t border-slate-800 pt-1.5 flex items-center justify-between gap-2">
+              <span className="text-cyan-300">(g ∘ f)(x)</span>
+              <span className="text-cyan-200 font-semibold">
+                {c}({a}x + {b}) + {d}
+              </span>
+            </div>
+          )}
+          {showDecryptFormula && (
+            <div
+              className={`${
+                !showEncryptFormula ? 'mt-1 border-t border-slate-800 pt-1.5' : ''
+              } flex items-center justify-between gap-2`}
+            >
+              <span className="text-amber-300">(g ∘ f)⁻¹(y)</span>
+              <span className="text-amber-200 font-semibold">
+                f⁻¹(g⁻¹(y))
+              </span>
+            </div>
+          )}
         </div>
       )}
 
@@ -96,30 +122,38 @@ export const FormulaBox: React.FC<FormulaBoxProps> = ({
           </div>
 
           <div className="rounded-md bg-slate-900/80 border border-cyan-500/30 px-3 py-2.5 space-y-1.5">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <span className="text-cyan-300 font-semibold">Enkripsi:</span>
-              <span>
-                (g ∘ f)(x) = g(f(x)) = {c}({a}x + {b}) + {d} ={' '}
-                <strong className="text-cyan-200">
-                  {composedCoef}x + {composedConst}
-                </strong>
-              </span>
-            </div>
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-1 border-t border-slate-800/80">
-              <span className="text-amber-300 font-semibold">Dekripsi:</span>
-              <span className="inline-flex flex-wrap items-center gap-1">
-                <span>(g ∘ f)⁻¹(y) = f⁻¹(g⁻¹(y)) =</span>
-                <Fraction
-                  numerator={
-                    <span>
-                      (<Fraction numerator={`y - ${d}`} denominator={c} />) -{' '}
-                      {b}
-                    </span>
-                  }
-                  denominator={a}
-                />
-              </span>
-            </div>
+            {showEncryptFormula && (
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="text-cyan-300 font-semibold">Enkripsi:</span>
+                <span>
+                  (g ∘ f)(x) = g(f(x)) = {c}({a}x + {b}) + {d} ={' '}
+                  <strong className="text-cyan-200">
+                    {composedCoef}x + {composedConst}
+                  </strong>
+                </span>
+              </div>
+            )}
+            {showDecryptFormula && (
+              <div
+                className={`flex flex-wrap items-center gap-x-2 gap-y-1 ${
+                  showEncryptFormula ? 'pt-1 border-t border-slate-800/80' : ''
+                }`}
+              >
+                <span className="text-amber-300 font-semibold">Dekripsi:</span>
+                <span className="inline-flex flex-wrap items-center gap-1">
+                  <span>(g ∘ f)⁻¹(y) = f⁻¹(g⁻¹(y)) =</span>
+                  <Fraction
+                    numerator={
+                      <span>
+                        (<Fraction numerator={`y - ${d}`} denominator={c} />) -{' '}
+                        {b}
+                      </span>
+                    }
+                    denominator={a}
+                  />
+                </span>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -176,7 +210,7 @@ export const FormulaBox: React.FC<FormulaBoxProps> = ({
             0 = Spasi · A = 1 · B = 2 · ... · Z = 26
           </div>
           <p className="text-slate-400">
-            Spasi ikut dienkripsi menjadi{' '}
+            Spasi ikut diproses lewat fungsi yang sama menjadi{' '}
             <span className="font-mono text-slate-200">
               (g ∘ f)(0) = {composedConst}
             </span>

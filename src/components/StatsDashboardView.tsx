@@ -10,7 +10,10 @@ import {
   Unlock,
   Clock,
 } from 'lucide-react';
-import { calculatePlayerNetWorth } from '../engine/gameEngine';
+import {
+  calculatePlayerNetWorth,
+  formatChallengeTypeLabel,
+} from '../engine/gameEngine';
 import { BoardTile, GameMode, GameSession, MatchSummaryRecord } from '../types/game';
 import { FormulaBox } from './FormulaBox';
 import { PlayerTokenIcon } from './PlayerTokenIcon';
@@ -213,7 +216,8 @@ export const StatsDashboardView: React.FC<StatsDashboardViewProps> = ({
                 Sesi Aktif Saat Ini ·{' '}
                 {activeOrSavedSession.mode === 'solo'
                   ? 'Demo Solo'
-                  : 'Classic Mode'}
+                  : 'Classic Mode'}{' '}
+                · {formatChallengeTypeLabel(activeOrSavedSession.challengeType)}
               </div>
               <div className="mt-0.5 text-sm font-semibold text-white">
                 Giliran ke-{activeOrSavedSession.turnCount}
@@ -284,6 +288,7 @@ export const StatsDashboardView: React.FC<StatsDashboardViewProps> = ({
             <div className="lg:col-span-5">
               <FormulaBox
                 keys={activeOrSavedSession.mathKeys}
+                challengeType={activeOrSavedSession.challengeType}
                 variant="compact"
                 title="Kunci Sandi Sesi Aktif"
               />
@@ -604,6 +609,7 @@ export const StatsDashboardView: React.FC<StatsDashboardViewProps> = ({
                     <tr>
                       <th className="px-4 py-3 font-medium">Waktu</th>
                       <th className="px-4 py-3 font-medium">Mode</th>
+                      <th className="px-4 py-3 font-medium">Jenis Tantangan</th>
                       <th className="px-4 py-3 font-medium">Investor Utama</th>
                       <th className="px-4 py-3 font-medium">Kunci Sesi</th>
                       <th className="px-4 py-3 font-medium text-right">Durasi</th>
@@ -629,6 +635,11 @@ export const StatsDashboardView: React.FC<StatsDashboardViewProps> = ({
                           {item.playerCount && item.mode === 'classic'
                             ? ` (${item.playerCount}p)`
                             : ''}
+                        </td>
+                        <td className="px-4 py-2.5 text-cyan-300 whitespace-nowrap">
+                          {item.challengeType
+                            ? formatChallengeTypeLabel(item.challengeType)
+                            : 'Mixed'}
                         </td>
                         <td className="px-4 py-2.5 font-medium text-white whitespace-nowrap">
                           {item.winnerName}

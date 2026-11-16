@@ -9,7 +9,10 @@ import {
   Clock,
   BarChart3,
 } from 'lucide-react';
-import { calculatePlayerNetWorth } from '../engine/gameEngine';
+import {
+  calculatePlayerNetWorth,
+  formatChallengeTypeLabel,
+} from '../engine/gameEngine';
 import { BoardTile, GameSession } from '../types/game';
 import { FormulaBox } from './FormulaBox';
 import { PlayerTokenIcon } from './PlayerTokenIcon';
@@ -145,7 +148,8 @@ export const SideCommandPanel: React.FC<SideCommandPanelProps> = ({
         <div className="flex items-center justify-between text-xs text-slate-400">
           <span className="font-semibold text-white">Daftar Pemain</span>
           <span className="font-mono tabular-nums">
-            Giliran ke-{session.turnCount}
+            {formatChallengeTypeLabel(session.challengeType)} · Giliran ke-
+            {session.turnCount}
           </span>
         </div>
 
@@ -208,6 +212,7 @@ export const SideCommandPanel: React.FC<SideCommandPanelProps> = ({
       <FormulaBox
         keys={session.mathKeys}
         variant="session-overview"
+        challengeType={session.challengeType}
         title="Fungsi Kunci Sesi"
       />
 

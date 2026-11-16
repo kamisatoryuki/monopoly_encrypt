@@ -30,7 +30,15 @@ export function loadActiveSession(): GameSession | null {
     if (!parsed || !parsed.id || !parsed.mathKeys || !Array.isArray(parsed.players)) {
       return null;
     }
-    return parsed;
+    const challengeType = parsed.challengeType ?? 'mixed';
+    return {
+      ...parsed,
+      challengeType,
+      mixedNextStep:
+        parsed.mixedNextStep ??
+        (challengeType === 'decryption' ? 'DECRYPT' : 'ENCRYPT'),
+      pendingMixedCipher: parsed.pendingMixedCipher ?? null,
+    };
   } catch {
     return null;
   }

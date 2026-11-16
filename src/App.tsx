@@ -19,6 +19,7 @@ import {
   createLog,
   createNewSession,
   findTileOwner,
+  getNextMixedStateOnSolve,
   JAIL_BAIL_AMOUNT,
   JAIL_TILE_ID,
   nextActivePlayerIndex,
@@ -40,6 +41,7 @@ import {
   saveSoundPreference,
 } from './services/storage';
 import {
+  ChallengeType,
   CryptoniaLoreConfig,
   GameMode,
   GameSession,
@@ -72,6 +74,8 @@ export default function App() {
     return pref;
   });
 
+  const [selectedChallengeType, setSelectedChallengeType] =
+    useState<ChallengeType>('mixed');
   const [selectedTileId, setSelectedTileId] = useState<number>(0);
   const [isMoving, setIsMoving] = useState<boolean>(false);
   const [guideOpen, setGuideOpen] = useState<boolean>(false);
@@ -208,8 +212,18 @@ export default function App() {
     saveSoundPreference(next);
   };
 
-  const handleStartGame = (mode: GameMode, playerNames: string[]) => {
-    const session = createNewSession({ mode, playerNames, lore });
+  const handleStartGame = (
+    mode: GameMode,
+    challengeType: ChallengeType,
+    playerNames: string[]
+  ) => {
+    setSelectedChallengeType(challengeType);
+    const session = createNewSession({
+      mode,
+      challengeType,
+      playerNames,
+      lore,
+    });
     setActiveSession(session);
     setSelectedTileId(0);
     setIsMoving(false);
@@ -926,24 +940,18 @@ export default function App() {
     });
   };
 
-  const handleUseHint = (step: 'ENCRYPT' | 'DECRYPT') => {
+  const handleUseHint = () => {
     setActiveSession((prev) => {
       if (!prev || !prev.activeChallenge) return prev;
       const pIdx = prev.activePlayerIndex;
       const chg = prev.activeChallenge;
-      const nextChg =
-        step === 'ENCRYPT'
-          ? {
-              ...chg,
-              hintsRevealedEncrypt: Math.min(3, chg.hintsRevealedEncrypt + 1),
-            }
-          : {
-              ...chg,
-              hintsRevealedDecrypt: Math.min(3, chg.hintsRevealedDecrypt + 1),
-            };
+      if (chg.hintsRevealed >= 3) return prev;
       return {
         ...prev,
-        activeChallenge: nextChg,
+        activeChallenge: {
+          ...chg,
+          hintsRevealed: Math.min(3, chg.hintsRevealed + 1),
+        },
         players: prev.players.map((p, idx) =>
           idx === pIdx ? { ...p, hintsUsed: p.hintsUsed + 1 } : p
         ),
@@ -964,30 +972,13 @@ export default function App() {
     });
   };
 
-  const handleEncryptStepSuccess = () => {
-    soundFx.success();
-    setActiveSession((prev) => {
-      if (!prev || !prev.activeChallenge) return prev;
-      const pIdx = prev.activePlayerIndex;
-      return {
-        ...prev,
-        activeChallenge: {
-          ...prev.activeChallenge,
-          encryptSolved: true,
-          currentStep: 'DECRYPT',
-        },
-        players: prev.players.map((p, idx) =>
-          idx === pIdx ? { ...p, encryptCorrect: p.encryptCorrect + 1 } : p
-        ),
-      };
-    });
-  };
-
-  const handleCompleteChallengePair = () => {
+  const handleCompleteChallenge = () => {
     if (!activeSession || !activeSession.activeChallenge) return;
     const chg = activeSession.activeChallenge;
     const pIdx = activeSession.activePlayerIndex;
     const player = activeSession.players[pIdx];
+    const isEncryptStep = chg.currentStep === 'ENCRYPT';
+    const nextMixed = getNextMixedStateOnSolve(activeSession);
     soundFx.success();
 
     if (chg.trigger === 'BUY_PROPERTY' && chg.targetTileId !== undefined) {
@@ -1000,7 +991,8 @@ export default function App() {
               balance: p.balance - price,
               ownedTileIds: [...p.ownedTileIds, tile.id],
               tileLevels: { ...p.tileLevels, [tile.id]: 0 },
-              decryptCorrect: p.decryptCorrect + 1,
+              encryptCorrect: p.encryptCorrect + (isEncryptStep ? 1 : 0),
+              decryptCorrect: p.decryptCorrect + (isEncryptStep ? 0 : 1),
               challengesCompleted: p.challengesCompleted + 1,
             }
           : p
@@ -1010,6 +1002,8 @@ export default function App() {
           ...activeSession,
           players: updatedPlayers,
           activeChallenge: null,
+          mixedNextStep: nextMixed.mixedNextStep,
+          pendingMixedCipher: nextMixed.pendingMixedCipher,
           logs: [
             createLog(
               `${player.name} membeli ${tile.name} (-${price} Kredit). ${pickFlavor(
@@ -1032,7 +1026,8 @@ export default function App() {
               ...p,
               inJail: false,
               jailTurns: 0,
-              decryptCorrect: p.decryptCorrect + 1,
+              encryptCorrect: p.encryptCorrect + (isEncryptStep ? 1 : 0),
+              decryptCorrect: p.decryptCorrect + (isEncryptStep ? 0 : 1),
               challengesCompleted: p.challengesCompleted + 1,
             }
           : p
@@ -1042,6 +1037,8 @@ export default function App() {
         phase: 'READY_ROLL',
         players: updatedPlayers,
         activeChallenge: null,
+        mixedNextStep: nextMixed.mixedNextStep,
+        pendingMixedCipher: nextMixed.pendingMixedCipher,
         logs: [
           createLog(
             `${player.name} lolos sandi dan bebas dari ${story.jail.title}! Silakan lempar dadu.`,
@@ -1055,12 +1052,16 @@ export default function App() {
 
     // SPECIAL_TILE or SPECIAL_CARD reward
     const reward = chg.rewardCredits;
+    const stepActionLabel = isEncryptStep
+      ? 'enkripsi (g ∘ f)(x)'
+      : 'dekripsi invers (g ∘ f)⁻¹(y)';
     const updatedPlayers = activeSession.players.map((p, idx) =>
       idx === pIdx
         ? {
             ...p,
             balance: p.balance + reward,
-            decryptCorrect: p.decryptCorrect + 1,
+            encryptCorrect: p.encryptCorrect + (isEncryptStep ? 1 : 0),
+            decryptCorrect: p.decryptCorrect + (isEncryptStep ? 0 : 1),
             challengesCompleted: p.challengesCompleted + 1,
           }
         : p
@@ -1070,9 +1071,11 @@ export default function App() {
         ...activeSession,
         players: updatedPlayers,
         activeChallenge: null,
+        mixedNextStep: nextMixed.mixedNextStep,
+        pendingMixedCipher: nextMixed.pendingMixedCipher,
         logs: [
           createLog(
-            `${player.name} menuntaskan pasangan enkripsi & dekripsi (+${reward} Kredit).`,
+            `${player.name} menuntaskan tantangan ${stepActionLabel} (+${reward} Kredit).`,
             'success'
           ),
           ...activeSession.logs,
@@ -1088,6 +1091,15 @@ export default function App() {
     const player = activeSession.players[pIdx];
     soundFx.error();
 
+    const resetMixedOnForfeit =
+      activeSession.challengeType === 'mixed' && chg.currentStep === 'DECRYPT';
+    const nextMixedStep = resetMixedOnForfeit
+      ? 'ENCRYPT'
+      : activeSession.mixedNextStep;
+    const nextPendingMixed = resetMixedOnForfeit
+      ? null
+      : activeSession.pendingMixedCipher;
+
     const updatedPlayers = activeSession.players.map((p, idx) =>
       idx === pIdx ? { ...p, challengesFailed: p.challengesFailed + 1 } : p
     );
@@ -1098,6 +1110,8 @@ export default function App() {
         phase: 'READY_ROLL',
         players: updatedPlayers,
         activeChallenge: null,
+        mixedNextStep: nextMixedStep,
+        pendingMixedCipher: nextPendingMixed,
         logs: [
           createLog(
             `${player.name} melewati tantangan bebas detensi.`,
@@ -1114,6 +1128,8 @@ export default function App() {
         ...activeSession,
         players: updatedPlayers,
         activeChallenge: null,
+        mixedNextStep: nextMixedStep,
+        pendingMixedCipher: nextPendingMixed,
         logs: [
           createLog(
             `${player.name} melewati tantangan tanpa hadiah/pembelian.`,
@@ -1218,7 +1234,7 @@ export default function App() {
                 type="button"
                 onClick={() => {
                   setShowStats(false);
-                  handleStartGame('solo', ['Investor Solo']);
+                  handleStartGame('solo', selectedChallengeType, ['Investor Solo']);
                 }}
                 className="rounded-lg bg-cyan-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-400 transition-colors whitespace-nowrap shrink-0"
               >
@@ -1245,7 +1261,7 @@ export default function App() {
             }}
             onStartDemoSolo={() => {
               setShowStats(false);
-              handleStartGame('solo', ['Investor Solo']);
+              handleStartGame('solo', selectedChallengeType, ['Investor Solo']);
             }}
             onClearHistory={() => {
               clearMatchHistory();
@@ -1261,6 +1277,8 @@ export default function App() {
             previewKeys={previewKeys}
             savedSession={savedSession}
             matchHistory={matchHistory}
+            selectedChallengeType={selectedChallengeType}
+            onChangeChallengeType={setSelectedChallengeType}
             onStartGame={handleStartGame}
             onResumeSavedSession={handleResumeSavedSession}
             onDiscardSavedSession={handleDiscardSavedSession}
@@ -1281,6 +1299,7 @@ export default function App() {
             onPlayAgain={() =>
               handleStartGame(
                 activeSession.mode,
+                activeSession.challengeType,
                 activeSession.players.map((p) => p.name)
               )
             }
@@ -1341,6 +1360,7 @@ export default function App() {
                     lastDice={activeSession.lastDice}
                     pendingCard={activeSession.pendingCard}
                     mathKeys={activeSession.mathKeys}
+                    challengeType={activeSession.challengeType}
                     isMoving={isMoving}
                     isPaused={Boolean(activeSession.soloTimer?.isPaused)}
                     onRollDice={handleRollDice}
@@ -1370,7 +1390,7 @@ export default function App() {
           )}
       </main>
 
-      {/* Paired Math Challenge Modal */}
+      {/* Math Challenge Modal */}
       {activeSession &&
         activeSession.phase === 'CHALLENGE' &&
         activeSession.activeChallenge && (
@@ -1380,8 +1400,7 @@ export default function App() {
             isPaused={Boolean(activeSession.soloTimer?.isPaused)}
             onUseHint={handleUseHint}
             onAttemptRecorded={handleAttemptRecorded}
-            onEncryptSuccess={handleEncryptStepSuccess}
-            onCompletePair={handleCompleteChallengePair}
+            onCompleteChallenge={handleCompleteChallenge}
             onForfeit={handleForfeitChallenge}
           />
         )}
@@ -1391,6 +1410,7 @@ export default function App() {
         isOpen={guideOpen}
         onClose={() => setGuideOpen(false)}
         mathKeys={currentFormulaKeys}
+        challengeType={activeSession?.challengeType ?? selectedChallengeType}
       />
 
       {/* Lore Import Modal */}
