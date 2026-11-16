@@ -1,0 +1,6 @@
+{
+  "name": "Monopoly Encrypt",
+  "description": "Permainan papan edukasi kriptografi linear, komposisi (g ∘ f)(x), dan invers dalam semesta Cryptonia 2099.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
